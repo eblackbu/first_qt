@@ -9,39 +9,14 @@ from pathlib import Path
 Student = namedtuple('Student', 'name surname mark')
 
 
-class AddNewString(QtWidgets.QWidget):
-
-    def __init__(self, table):
-        super().__init__()
-        self.init_ui()
-
-    def init_ui(self):
-        self.btn = QtWidgets.QPushButton('Dialog', self)
-        self.btn.move(20, 20)
-        self.btn.clicked.connect(self.showDialog)
-
-        self.le = QtWidgets.QLineEdit(self)
-        self.le.move(130, 22)
-
-        self.setGeometry(300, 300, 290, 150)
-        self.setWindowTitle('Input dialog')
-        self.show()
-
-
-    def showDialog(self):
-        text, ok = QtWidgets.QInputDialog.getText(self, 'Input Dialog', 'Enter your name:')
-        if ok:
-            self.le.setText(str(text))
-
-
-class MyMainWindow:
+class MyMainProgram:
 
     def __init__(self, main_window):
         self.main = main_window
         self.data = dict()
-        self.initUi()
+        self._initUi()
 
-    def initUi(self):
+    def _initUi(self):
         self.main.setObjectName("MainWindow")
         self.main.resize(556, 559)
         self.centralWidget = QtWidgets.QWidget(self.main)
@@ -53,33 +28,61 @@ class MyMainWindow:
         self.table.setColumnCount(5)
         self.table.setRowCount(0)
         self.table.setHorizontalHeaderLabels(['ID', 'Name', 'Surname', 'Mark'])
+        self._setLastRow()
 
         self.loadFromFileBtn = QtWidgets.QPushButton(self.centralWidget)
         self.loadFromFileBtn.setGeometry(QtCore.QRect(20, 40, 521, 28))
         self.loadFromFileBtn.setObjectName("loadFromFileBtn")
         self.loadFromFileBtn.clicked.connect(self.loadFromFile)
-        self.addRowBtn = QtWidgets.QPushButton(self.centralWidget)
-        self.addRowBtn.setGeometry(QtCore.QRect(20, 420, 521, 28))
-        self.addRowBtn.setObjectName("addRowBtn")
-        self.addRowBtn.clicked.connect(self.createNewRow)
         self.saveToFileBtn = QtWidgets.QPushButton(self.centralWidget)
         self.saveToFileBtn.setGeometry(QtCore.QRect(20, 460, 521, 28))
         self.saveToFileBtn.setObjectName("saveToFileBtn")
         self.saveToFileBtn.clicked.connect(self.saveToFile)
 
         self.main.setCentralWidget(self.centralWidget)
-        self.retranslateUi()
+        self._retranslateUi()
         QtCore.QMetaObject.connectSlotsByName(self.main)
 
-    def retranslateUi(self):
+    def _retranslateUi(self):
         _translate = QtCore.QCoreApplication.translate
         self.main.setWindowTitle(_translate("MainWindow", "Задание 1"))
         self.loadFromFileBtn.setText(_translate("MainWindow", "Загрузить из файла"))
-        self.addRowBtn.setText(_translate("MainWindow", "Добавить строку"))
         self.saveToFileBtn.setText(_translate("MainWindow", "Сохранить в файл"))
 
+    def _insertNewRow(self, id, student, current_row_num):
+        self.table.insertRow(current_row_num)
+        self.table.setItem(current_row_num, 0, QtWidgets.QTableWidgetItem(id))
+        self.table.setItem(current_row_num, 1, QtWidgets.QTableWidgetItem(student.name))
+        self.table.setItem(current_row_num, 2, QtWidgets.QTableWidgetItem(student.surname))
+        self.table.setItem(current_row_num, 3, QtWidgets.QTableWidgetItem(student.mark))
+        btn = QtWidgets.QPushButton(self.table)
+        btn.setText('Delete')
+        btn.clicked.connect(self.deleteRowDeco(id))
+        self.table.setCellWidget(current_row_num, 4, btn)
+
+    def _setLastRow(self):
+        current_row_num = self.table.rowCount()
+        self.table.insertRow(current_row_num)
+        btn = QtWidgets.QPushButton(self.table)
+        btn.setText('Add')
+        btn.clicked.connect(self.createNewRow)
+        self.table.setCellWidget(current_row_num, 4, btn)
+
     def createNewRow(self):
-        pass
+        new_row = self.table.rowCount() - 1 if self.table.rowCount() > -1 else 0
+        try:
+            if self.table.item(new_row, 0) and self.table.item(new_row, 0).text() not in self.data.keys():
+                id = self.table.item(new_row, 0).text()
+                student = Student(self.table.item(new_row, 1).text(), self.table.item(new_row, 2).text(),
+                                  self.table.item(new_row, 3).text())
+                self.data[id] = student
+                self._insertNewRow(id, student, new_row)
+                for col in range(4):
+                    self.table.item(new_row + 1, col).setText('')
+            else:
+                raise KeyError()
+        except Exception:
+            self.makeErrorMessage('Ошибка при добавлении студента')
 
     def deleteRowDeco(self, student_id):
 
@@ -111,16 +114,8 @@ class MyMainWindow:
 
             self.table.setRowCount(0)
             for id, student in self.data.items():
-                current_row_num = self.table.rowCount()
-                self.table.insertRow(current_row_num)
-                self.table.setItem(current_row_num, 0, QtWidgets.QTableWidgetItem(id))
-                self.table.setItem(current_row_num, 1, QtWidgets.QTableWidgetItem(student.name))
-                self.table.setItem(current_row_num, 2, QtWidgets.QTableWidgetItem(student.surname))
-                self.table.setItem(current_row_num, 3, QtWidgets.QTableWidgetItem(student.mark))
-                btn = QtWidgets.QPushButton(self.table)
-                btn.setText('Delete')
-                btn.clicked.connect(self.deleteRowDeco(id))
-                self.table.setCellWidget(current_row_num, 4, btn)
+                self._insertNewRow(id, student, self.table.rowCount())
+            self._setLastRow()
 
     def saveToFile(self):
         filename = QFileDialog.getSaveFileName(directory=str(Path.home()), filter='(*.xml)')[0]
@@ -130,7 +125,8 @@ class MyMainWindow:
                 tree = ET.ElementTree(root)
                 for id, student in self.data.items():
                     student_elem = ET.Element('student')
-                    for tag, text in [('id', id), ('name', student.name), ('surname', student.surname), ('mark', student.mark)]:
+                    for tag, text in [('id', id), ('name', student.name),
+                                      ('surname', student.surname), ('mark', student.mark)]:
                         new_elem = ET.Element(tag)
                         new_elem.text = text
                         student_elem.append(new_elem)
@@ -146,8 +142,9 @@ class MyMainWindow:
         msg.setText(error_string)
         msg.exec()
 
+
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
-    ui = MyMainWindow(QtWidgets.QMainWindow())
+    ui = MyMainProgram(QtWidgets.QMainWindow())
     ui.main.show()
     sys.exit(app.exec_())
